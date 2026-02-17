@@ -2,6 +2,8 @@ package com.victorlopez.incident_api.service;
 
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
 import com.victorlopez.incident_api.dto.IncidentResponse;
+import com.victorlopez.incident_api.dto.MetricsResponse;
+import com.victorlopez.incident_api.dto.UpdateStatusRequest;
 import com.victorlopez.incident_api.model.Incident;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
@@ -135,5 +137,66 @@ class IncidentServiceTest {
         // ASSERT
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getStatus()).isEqualTo(Status.OPEN);
+    }
+
+    @Test
+    @DisplayName("Should update incident status to RESOLVED")
+    void shouldUpdateIncidentStatus() {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        Incident existing = Incident.builder()
+                .id(id)
+                .title("API endpoint returning 500")
+                .description("Users getting internal server error on checkout endpoint")
+                .severity(Severity.HIGH)
+                .status(Status.OPEN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        UpdateStatusRequest request = new UpdateStatusRequest();
+        request.setStatus(Status.RESOLVED);
+        request.setActualResolution("Rolled back faulty deployment from 14:30");
+
+        Incident updated = Incident.builder()
+                .id(id)
+                .title(existing.getTitle())
+                .description(existing.getDescription())
+                .severity(existing.getSeverity())
+                .status(Status.RESOLVED)
+                .actualResolution("Rolled back faulty deployment from 14:30")
+                .createdAt(existing.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .resolvedAt(LocalDateTime.now())
+                .build();
+
+        when(incidentRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(updated);
+
+        // ACT
+        IncidentResponse response = incidentService.updateStatus(id, request);
+
+        // ASSERT
+        assertThat(response.getStatus()).isEqualTo(Status.RESOLVED);
+    }
+
+    @Test
+    @DisplayName("Should return metrics")
+    void shouldReturnMetrics() {
+        // ARRANGE
+        when(incidentRepository.count()).thenReturn(10L);
+        when(incidentRepository.countByStatus(any())).thenReturn(2L);
+        when(incidentRepository.countBySeverity(any())).thenReturn(3L);
+        when(incidentRepository.countByCategory(any())).thenReturn(1L);
+        when(incidentRepository.findAverageResolutionHours()).thenReturn(4.5);
+        when(incidentRepository.countByStatusAndSeverity(Status.OPEN, Severity.CRITICAL)).thenReturn(1L);
+
+        // ACT
+        MetricsResponse metrics = incidentService.getMetrics();
+
+        // ASSERT
+        assertThat(metrics.getTotalIncidents()).isEqualTo(10L);
+        assertThat(metrics.getAverageResolutionHours()).isEqualTo(4.5);
+        assertThat(metrics.getOpenCriticalIncidents()).isEqualTo(1L);
     }
 }

@@ -2,7 +2,10 @@ package com.victorlopez.incident_api.service;
 
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
 import com.victorlopez.incident_api.dto.IncidentResponse;
+import com.victorlopez.incident_api.dto.MetricsResponse;
+import com.victorlopez.incident_api.dto.UpdateStatusRequest;
 import com.victorlopez.incident_api.exception.IncidentNotFoundException;
+import com.victorlopez.incident_api.model.Category;
 import com.victorlopez.incident_api.model.Incident;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
@@ -11,8 +14,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -61,6 +68,61 @@ public class IncidentService {
                 .toList();
     }
 
+    public IncidentResponse updateStatus(UUID id, UpdateStatusRequest request) {
+        log.info("Updating status of incident {} to {}", id, request.getStatus());
+
+        Incident incident = incidentRepository.findById(id)
+                .orElseThrow(() -> new IncidentNotFoundException(id));
+
+        incident.setStatus(request.getStatus());
+
+        if (request.getActualResolution() != null) {
+            incident.setActualResolution(request.getActualResolution());
+        }
+
+        // Set resolvedAt when incident is resolved or closed
+        if (request.getStatus() == Status.RESOLVED || request.getStatus() == Status.CLOSED) {
+            incident.setResolvedAt(LocalDateTime.now());
+        }
+
+        Incident updated = incidentRepository.save(incident);
+        return mapToResponse(updated);
+    }
+
+    public MetricsResponse getMetrics() {
+        long total = incidentRepository.count();
+
+        Map<String, Long> byStatus = Arrays.stream(Status.values())
+                .collect(Collectors.toMap(
+                        Enum::name,
+                        incidentRepository::countByStatus
+                ));
+
+        Map<String, Long> bySeverity = Arrays.stream(Severity.values())
+                .collect(Collectors.toMap(
+                        Enum::name,
+                        incidentRepository::countBySeverity
+                ));
+
+        Map<String, Long> byCategory = Arrays.stream(Category.values())
+                .collect(Collectors.toMap(
+                        Enum::name,
+                        incidentRepository::countByCategory
+                ));
+
+        Double avgHours = incidentRepository.findAverageResolutionHours();
+        long openCritical = incidentRepository.countByStatusAndSeverity(Status.OPEN, Severity.CRITICAL);
+
+        return MetricsResponse.builder()
+                .totalIncidents(total)
+                .byStatus(byStatus)
+                .bySeverity(bySeverity)
+                .byCategory(byCategory)
+                .averageResolutionHours(avgHours != null ? avgHours : 0.0)
+                .openCriticalIncidents(openCritical)
+                .build();
+    }
+
     private IncidentResponse mapToResponse(Incident incident) {
         return IncidentResponse.builder()
                 .id(incident.getId())
@@ -76,6 +138,7 @@ public class IncidentService {
                 .aiConfidence(incident.getAiConfidence())
                 .createdAt(incident.getCreatedAt())
                 .updatedAt(incident.getUpdatedAt())
+                .actualResolution(incident.getActualResolution())
                 .build();
     }
 }

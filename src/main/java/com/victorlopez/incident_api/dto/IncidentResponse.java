@@ -26,4 +26,5 @@ public class IncidentResponse {
     private Double aiConfidence;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String actualResolution;
 }

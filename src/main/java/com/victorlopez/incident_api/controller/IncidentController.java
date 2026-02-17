@@ -2,6 +2,8 @@ package com.victorlopez.incident_api.controller;
 
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
 import com.victorlopez.incident_api.dto.IncidentResponse;
+import com.victorlopez.incident_api.dto.MetricsResponse;
+import com.victorlopez.incident_api.dto.UpdateStatusRequest;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
 import com.victorlopez.incident_api.service.IncidentService;
@@ -40,5 +42,19 @@ public class IncidentController {
     public ResponseEntity<IncidentResponse> getIncidentById(@PathVariable UUID id) {
         IncidentResponse response = incidentService.getIncidentById(id);
         return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<IncidentResponse> updateStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateStatusRequest request) {
+        IncidentResponse response = incidentService.updateStatus(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/metrics")
+    public ResponseEntity<MetricsResponse> getMetrics() {
+        MetricsResponse metrics = incidentService.getMetrics();
+        return ResponseEntity.ok(metrics);
     }
 }
