@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,5 +75,65 @@ class IncidentServiceTest {
         assertThatThrownBy(() -> incidentService.getIncidentById(randomId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Incident not found with id");
+    }
+
+    @Test
+    @DisplayName("Should return all incidents when no filters applied")
+    void shouldReturnAllIncidents() {
+        // ARRANGE
+        List<Incident> incidents = List.of(
+                Incident.builder()
+                        .id(UUID.randomUUID())
+                        .title("First incident")
+                        .description("First incident description")
+                        .severity(Severity.HIGH)
+                        .status(Status.OPEN)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build(),
+                Incident.builder()
+                        .id(UUID.randomUUID())
+                        .title("Second incident")
+                        .description("Second incident description")
+                        .severity(Severity.LOW)
+                        .status(Status.RESOLVED)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        when(incidentRepository.findAll()).thenReturn(incidents);
+
+        // ACT
+        List<IncidentResponse> responses = incidentService.getAllIncidents(null, null);
+
+        // ASSERT
+        assertThat(responses).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Should filter incidents by status")
+    void shouldFilterIncidentsByStatus() {
+        // ARRANGE
+        List<Incident> openIncidents = List.of(
+                Incident.builder()
+                        .id(UUID.randomUUID())
+                        .title("Open incident")
+                        .description("Open incident description")
+                        .severity(Severity.HIGH)
+                        .status(Status.OPEN)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        when(incidentRepository.findByStatus(Status.OPEN)).thenReturn(openIncidents);
+
+        // ACT
+        List<IncidentResponse> responses = incidentService.getAllIncidents(Status.OPEN, null);
+
+        // ASSERT
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getStatus()).isEqualTo(Status.OPEN);
     }
 }
