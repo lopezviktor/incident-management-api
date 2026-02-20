@@ -411,7 +411,7 @@ incident-management-api/
 │   │   │   │   └── AIAnalysisService.java
 │   │   │   └── IncidentApiApplication.java
 │   │   └── resources/
-│   │       ├── application.properties
+│   │       └── application.properties
 │   └── test/
 │       └── java/com/victorlopez/incident_api/
 │       │   ├── service/
