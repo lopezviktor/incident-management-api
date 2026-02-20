@@ -113,7 +113,7 @@ This is a **portfolio project** built to demonstrate:
             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Repository Layer                           │
-│              (Spring Data JPA)                              │
+│                  (Spring Data JPA)                          │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
