@@ -1,9 +1,11 @@
 package com.victorlopez.incident_api.service;
 
+import com.victorlopez.incident_api.dto.AIAnalysisResult;
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
 import com.victorlopez.incident_api.dto.IncidentResponse;
 import com.victorlopez.incident_api.dto.MetricsResponse;
 import com.victorlopez.incident_api.dto.UpdateStatusRequest;
+import com.victorlopez.incident_api.model.Category;
 import com.victorlopez.incident_api.model.Incident;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
@@ -23,6 +25,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +34,9 @@ class IncidentServiceTest {
 
     @Mock
     private IncidentRepository incidentRepository;
+
+    @Mock
+    private AIAnalysisService aiAnalysisService;
 
     @InjectMocks
     private IncidentService incidentService;
@@ -43,13 +50,31 @@ class IncidentServiceTest {
         request.setDescription("Users getting internal server error on checkout endpoint");
         request.setReportedBy("victor.lopez");
 
+        // Mock AI analysis result
+        AIAnalysisResult mockAIResult = new AIAnalysisResult(
+                Severity.HIGH,
+                Category.BACKEND,
+                "Backend Team",
+                "Check server logs and rollback recent deployment if necessary",
+                4,
+                0.88
+        );
+
+        when(aiAnalysisService.analyzeIncident(anyString(), anyString()))
+                .thenReturn(mockAIResult);
+
         Incident savedIncident = Incident.builder()
                 .id(UUID.randomUUID())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .reportedBy(request.getReportedBy())
-                .severity(Severity.MEDIUM)
+                .severity(Severity.HIGH)
+                .category(Category.BACKEND)
                 .status(Status.OPEN)
+                .assignedTeam("Backend Team")
+                .suggestedSolution("Check server logs and rollback recent deployment if necessary")
+                .estimatedResolutionHours(4)
+                .aiConfidence(0.88)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -63,7 +88,17 @@ class IncidentServiceTest {
         assertThat(response.getId()).isNotNull();
         assertThat(response.getTitle()).isEqualTo("API endpoint returning 500");
         assertThat(response.getStatus()).isEqualTo(Status.OPEN);
-        assertThat(response.getSeverity()).isEqualTo(Severity.MEDIUM);
+        assertThat(response.getSeverity()).isEqualTo(Severity.HIGH);
+        assertThat(response.getCategory()).isEqualTo(Category.BACKEND);
+        assertThat(response.getAssignedTeam()).isEqualTo("Backend Team");
+        assertThat(response.getAiConfidence()).isEqualTo(0.88);
+
+        // Verify AI was called
+        verify(aiAnalysisService).analyzeIncident(
+                "API endpoint returning 500",
+                "Users getting internal server error on checkout endpoint"
+        );
+        verify(incidentRepository).save(any(Incident.class));
     }
 
     @Test

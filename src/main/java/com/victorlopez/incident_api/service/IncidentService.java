@@ -1,9 +1,6 @@
 package com.victorlopez.incident_api.service;
 
-import com.victorlopez.incident_api.dto.CreateIncidentRequest;
-import com.victorlopez.incident_api.dto.IncidentResponse;
-import com.victorlopez.incident_api.dto.MetricsResponse;
-import com.victorlopez.incident_api.dto.UpdateStatusRequest;
+import com.victorlopez.incident_api.dto.*;
 import com.victorlopez.incident_api.exception.IncidentNotFoundException;
 import com.victorlopez.incident_api.model.Category;
 import com.victorlopez.incident_api.model.Incident;
@@ -27,14 +24,33 @@ import java.util.stream.Collectors;
 public class IncidentService {
 
     private final IncidentRepository incidentRepository;
+    private final AIAnalysisService aiAnalysisService;
 
     public IncidentResponse createIncident(CreateIncidentRequest request) {
         log.info("Creating incident: {}", request.getTitle());
 
+        // NUEVO: Análisis con AI
+        AIAnalysisResult aiAnalysis = aiAnalysisService.analyzeIncident(
+                request.getTitle(),
+                request.getDescription()
+        );
+
+        log.info("AI analysis - Severity: {}, Category: {}",
+                aiAnalysis.severity(), aiAnalysis.category());
+
+        // Crear incident con datos de AI
         Incident incident = Incident.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .reportedBy(request.getReportedBy())
+                // Datos del AI
+                .severity(aiAnalysis.severity())
+                .category(aiAnalysis.category())
+                .assignedTeam(aiAnalysis.assignedTeam())
+                .suggestedSolution(aiAnalysis.suggestedSolution())
+                .estimatedResolutionHours(aiAnalysis.estimatedResolutionHours())
+                .aiConfidence(aiAnalysis.confidence())
+                .status(Status.OPEN)
                 .build();
 
         Incident saved = incidentRepository.save(incident);
