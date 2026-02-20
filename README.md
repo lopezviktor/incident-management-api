@@ -414,11 +414,11 @@ incident-management-api/
 │   │       ├── application.properties
 │   └── test/
 │       └── java/com/victorlopez/incident_api/
-│       |   ├── service/
-│       |   │   ├── IncidentServiceTest.java
-│       |   │   └── AIAnalysisServiceTest.java
-│       |   └── repository/
-│       |       └── IncidentRepositoryTest.java
+│       │   ├── service/
+│       │   │   ├── IncidentServiceTest.java
+│       │   │   └── AIAnalysisServiceTest.java
+│       │   └── repository/
+│       │       └── IncidentRepositoryTest.java
 │       └── resources/
 |       └── application-test.properties|
 ├── docker-compose.yml
