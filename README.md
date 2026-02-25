@@ -113,7 +113,7 @@ This is a **portfolio project** built to demonstrate:
             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Repository Layer                           │
-│              (Spring Data JPA)                              │
+│                  (Spring Data JPA)                          │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
@@ -411,14 +411,14 @@ incident-management-api/
 │   │   │   │   └── AIAnalysisService.java
 │   │   │   └── IncidentApiApplication.java
 │   │   └── resources/
-│   │       ├── application.properties
+│   │       └── application.properties
 │   └── test/
 │       └── java/com/victorlopez/incident_api/
-│       |   ├── service/
-│       |   │   ├── IncidentServiceTest.java
-│       |   │   └── AIAnalysisServiceTest.java
-│       |   └── repository/
-│       |       └── IncidentRepositoryTest.java
+│       │   ├── service/
+│       │   │   ├── IncidentServiceTest.java
+│       │   │   └── AIAnalysisServiceTest.java
+│       │   └── repository/
+│       │       └── IncidentRepositoryTest.java
 │       └── resources/
 |       └── application-test.properties|
 ├── docker-compose.yml
