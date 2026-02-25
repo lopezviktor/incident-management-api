@@ -1,37 +1,51 @@
 package com.victorlopez.incident_api.config;
 
+import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
-import org.springframework.context.ApplicationListener;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.MapPropertySource;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.sql.DataSource;
 
-@Component
+@Configuration
 @Slf4j
-public class DatabaseUrlConverter implements ApplicationListener<ApplicationEnvironmentPreparedEvent> {
+public class DatabaseUrlConverter {
 
-    @Override
-    public void onApplicationEvent(ApplicationEnvironmentPreparedEvent event) {
-        ConfigurableEnvironment environment = event.getEnvironment();
+    @Bean
+    @Primary
+    @ConditionalOnProperty(name = "DATABASE_URL")
+    public DataSource dataSource(Environment environment, DataSourceProperties properties) {
         String databaseUrl = environment.getProperty("DATABASE_URL");
-
+        
         if (databaseUrl != null && databaseUrl.startsWith("postgresql://")) {
-            // Convert Railway's postgresql:// to Spring Boot's jdbc:postgresql://
+            // Convert Render/Railway's postgresql:// to Spring Boot's jdbc:postgresql://
             String jdbcUrl = "jdbc:" + databaseUrl;
             
-            log.info("Converting DATABASE_URL from Railway format to JDBC format");
-            log.debug("Original: {}", databaseUrl);
-            log.debug("Converted: {}", jdbcUrl);
+            log.info("Converting DATABASE_URL from cloud provider format to JDBC format");
+            log.info("Original: postgresql://...");
+            log.info("Converted: jdbc:postgresql://...");
             
-            Map<String, Object> jdbcProperties = new HashMap<>();
-            jdbcProperties.put("JDBC_DATABASE_URL", jdbcUrl);
+            HikariDataSource dataSource = properties.initializeDataSourceBuilder()
+                    .type(HikariDataSource.class)
+                    .build();
+            dataSource.setJdbcUrl(jdbcUrl);
             
-            MapPropertySource jdbcPropertySource = new MapPropertySource("jdbcConversion", jdbcProperties);
-            environment.getPropertySources().addFirst(jdbcPropertySource);
+            // Set connection pool properties
+            dataSource.setMaximumPoolSize(Integer.parseInt(environment.getProperty("DB_POOL_SIZE", "10")));
+            dataSource.setMinimumIdle(Integer.parseInt(environment.getProperty("DB_POOL_MIN_IDLE", "2")));
+            dataSource.setConnectionTimeout(Long.parseLong(environment.getProperty("DB_CONNECTION_TIMEOUT", "30000")));
+            dataSource.setIdleTimeout(Long.parseLong(environment.getProperty("DB_IDLE_TIMEOUT", "600000")));
+            dataSource.setMaxLifetime(Long.parseLong(environment.getProperty("DB_MAX_LIFETIME", "1800000")));
+            
+            log.info("Successfully configured DataSource with converted JDBC URL");
+            return dataSource;
+        } else {
+            log.info("DATABASE_URL not in postgresql:// format, using default configuration");
+            return properties.initializeDataSourceBuilder().type(HikariDataSource.class).build();
         }
     }
 }

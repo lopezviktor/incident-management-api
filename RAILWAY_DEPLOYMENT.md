@@ -1,6 +1,6 @@
-# Railway Deployment Guide
+# Cloud Deployment Guide
 
-This document provides instructions for deploying the Incident Management API to Railway.
+This document provides instructions for deploying the Incident Management API to cloud platforms like Railway and Render.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ This document provides instructions for deploying the Incident Management API to
 2. Select "Database" → "PostgreSQL"
 3. Railway will automatically create a PostgreSQL instance and set the `DATABASE_URL` environment variable
 
-**Important Note**: Railway provides `DATABASE_URL` in the format `postgresql://user:pass@host:port/db`, but Spring Boot expects `jdbc:postgresql://...`. The application includes automatic conversion logic to handle this.
+**Important Note**: Cloud providers (Railway, Render) provide `DATABASE_URL` in the format `postgresql://user:pass@host:port/db`, but Spring Boot expects `jdbc:postgresql://...`. The application includes automatic conversion logic (`DatabaseUrlConverter`) to handle this for seamless deployment.
 
 ### 3. Configure Environment Variables
 
