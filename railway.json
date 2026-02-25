@@ -1,0 +1,40 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "buildCommand": "./mvnw clean package -DskipTests"
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "startCommand": "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -jar target/*.jar",
+    "healthcheckPath": "/actuator/health",
+    "healthcheckTimeout": 30
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "SPRING_PROFILES_ACTIVE": "production",
+        "JPA_DDL_AUTO": "update",
+        "JPA_SHOW_SQL": "false",
+        "JPA_FORMAT_SQL": "false",
+        "LOG_LEVEL": "INFO",
+        "WEB_LOG_LEVEL": "WARN",
+        "SQL_LOG_LEVEL": "WARN",
+        "HEALTH_SHOW_DETAILS": "when-authorized",
+        "INCLUDE_STACKTRACE": "never",
+        "INCLUDE_ERROR_MESSAGE": "never",
+        "SWAGGER_ENABLED": "true",
+        "OPENAI_MODEL": "gpt-4o-mini",
+        "OPENAI_TEMPERATURE": "0.3",
+        "DB_POOL_SIZE": "10",
+        "DB_POOL_MIN_IDLE": "2",
+        "DB_CONNECTION_TIMEOUT": "30000",
+        "DB_IDLE_TIMEOUT": "600000",
+        "DB_MAX_LIFETIME": "1800000"
+      }
+    }
+  },
+  "experimental": {
+    "configAsCode": true
+  }
+}
