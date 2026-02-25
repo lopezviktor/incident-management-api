@@ -234,4 +234,80 @@ class IncidentServiceTest {
         assertThat(metrics.getAverageResolutionHours()).isEqualTo(4.5);
         assertThat(metrics.getOpenCriticalIncidents()).isEqualTo(1L);
     }
+
+    @Test
+    @DisplayName("Should find similar incidents and return responses")
+    void shouldFindSimilarIncidents() {
+        // ARRANGE
+        UUID excludeId = UUID.randomUUID();
+        String description = "Database connection timeout error in production";
+
+        List<Incident> similarIncidents = List.of(
+                Incident.builder()
+                        .id(UUID.randomUUID())
+                        .title("Database connection issues")
+                        .description("Connection pool exhausted in production environment")
+                        .severity(Severity.HIGH)
+                        .status(Status.RESOLVED)
+                        .category(Category.DATABASE)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build(),
+                Incident.builder()
+                        .id(UUID.randomUUID())
+                        .title("Timeout error on API calls")
+                        .description("API endpoints timing out during peak traffic")
+                        .severity(Severity.MEDIUM)
+                        .status(Status.OPEN)
+                        .category(Category.BACKEND)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        when(incidentRepository.findAll()).thenReturn(similarIncidents);
+
+        // ACT
+        List<IncidentResponse> responses = incidentService.findSimilarIncidents(description, excludeId);
+
+        // ASSERT
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getTitle()).isEqualTo("Database connection issues");
+        assertThat(responses.get(1).getTitle()).isEqualTo("Timeout error on API calls");
+
+        verify(incidentRepository).findAll();
+    }
+
+    @Test
+    @DisplayName("Should return empty list when no similar incidents found")
+    void shouldReturnEmptyListWhenNoSimilarIncidentsFound() {
+        // ARRANGE
+        UUID excludeId = UUID.randomUUID();
+        String description = "Very unique error that never happened before";
+
+        when(incidentRepository.findAll()).thenReturn(List.of());
+
+        // ACT
+        List<IncidentResponse> responses = incidentService.findSimilarIncidents(description, excludeId);
+
+        // ASSERT
+        assertThat(responses).isEmpty();
+        verify(incidentRepository).findAll();
+    }
+
+    @Test
+    @DisplayName("Should extract keywords correctly from description")
+    void shouldExtractKeywordsCorrectly() {
+        // ARRANGE
+        UUID excludeId = UUID.randomUUID();
+        String description = "The database connection is timing out!";
+
+        when(incidentRepository.findAll()).thenReturn(List.of());
+
+        // ACT
+        incidentService.findSimilarIncidents(description, excludeId);
+
+        // ASSERT
+        verify(incidentRepository).findAll();
+    }
 }

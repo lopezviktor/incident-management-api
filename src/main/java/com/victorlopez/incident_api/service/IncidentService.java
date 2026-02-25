@@ -105,6 +105,52 @@ public class IncidentService {
         return mapToResponse(updated);
     }
 
+    public List<IncidentResponse> findSimilarIncidents(String description, UUID excludeId) {
+        log.info("Finding similar incidents for description: {} (excluding: {})", description, excludeId);
+        
+        String keywords = extractKeywords(description);
+        log.debug("Extracted keywords: {}", keywords);
+        
+        List<Incident> allIncidents = incidentRepository.findAll();
+        List<Incident> similarIncidents = allIncidents.stream()
+                .filter(incident -> !incident.getId().equals(excludeId))
+                .filter(incident -> containsAnyKeyword(incident, keywords))
+                .toList();
+        
+        return similarIncidents.stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+    
+    private boolean containsAnyKeyword(Incident incident, String keywords) {
+        if (keywords == null || keywords.trim().isEmpty()) {
+            return false;
+        }
+        
+        String[] keywordArray = keywords.toLowerCase().split("\\s+");
+        String titleLower = incident.getTitle().toLowerCase();
+        String descriptionLower = incident.getDescription().toLowerCase();
+        
+        for (String keyword : keywordArray) {
+            if (titleLower.contains(keyword) || descriptionLower.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String extractKeywords(String description) {
+        if (description == null || description.trim().isEmpty()) {
+            return "";
+        }
+        
+        return description.toLowerCase()
+                .replaceAll("[^a-zA-Z0-9\\s]", "")
+                .replaceAll("\\b(the|is|are|was|were|and|or|in|on|at|to|for|of|with|by|from|a|an|that|this|it)\\b", "")
+                .trim()
+                .replaceAll("\\s+", " ");
+    }
+
     public MetricsResponse getMetrics() {
         long total = incidentRepository.count();
 

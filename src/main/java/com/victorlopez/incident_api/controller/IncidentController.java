@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -56,5 +57,19 @@ public class IncidentController {
     public ResponseEntity<MetricsResponse> getMetrics() {
         MetricsResponse metrics = incidentService.getMetrics();
         return ResponseEntity.ok(metrics);
+    }
+
+    @GetMapping("/similar")
+    public ResponseEntity<List<IncidentResponse>> getSimilarIncidents(
+            @RequestParam(required = true) String description,
+            @RequestParam(required = false) UUID excludeId) {
+        
+        if (!StringUtils.hasText(description)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        UUID actualExcludeId = excludeId != null ? excludeId : UUID.randomUUID();
+        List<IncidentResponse> similarIncidents = incidentService.findSimilarIncidents(description, actualExcludeId);
+        return ResponseEntity.ok(similarIncidents);
     }
 }
