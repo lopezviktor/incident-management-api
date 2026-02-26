@@ -7,6 +7,22 @@
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991.svg)](https://openai.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![Live](https://img.shields.io/badge/Live-Render-46E3B7.svg)](https://incident-management-api-w1zj.onrender.com)
+
+---
+
+## 🌐 Live Demo
+
+The API is deployed and publicly accessible on Render:
+
+| Link | URL |
+|------|-----|
+| **API** | https://incident-management-api-w1zj.onrender.com/api/incidents |
+| **Swagger UI** | https://incident-management-api-w1zj.onrender.com/swagger-ui.html |
+| **Metrics** | https://incident-management-api-w1zj.onrender.com/api/incidents/metrics |
+| **Health Check** | https://incident-management-api-w1zj.onrender.com/actuator/health |
+
+> **Note**: The free tier on Render spins down after inactivity — the first request may take ~30 seconds to cold start.
 
 ---
 
@@ -46,7 +62,7 @@ This is a **portfolio project** built to demonstrate:
 - Real-world AI integration (not just a tutorial)
 - Test-Driven Development (TDD)
 - Clean architecture principles (SOLID, DRY)
-- Docker deployment
+- Render deployment (production)
 - Professional API design
 
 ---
@@ -215,6 +231,10 @@ This is a **portfolio project** built to demonstrate:
 
 **Request:**
 ```bash
+# Production
+curl -X POST https://incident-management-api-w1zj.onrender.com/api/incidents \
+
+# Local
 curl -X POST http://localhost:8080/api/incidents \
   -H "Content-Type: application/json" \
   -d '{
@@ -493,11 +513,11 @@ This project demonstrates:
 
 ## 🔮 Roadmap
 
-### Week 3 (In Progress)
-- [ ] Swagger/OpenAPI documentation
-- [ ] Seed data (15 example incidents)
-- [ ] Similarity search endpoint
-- [ ] Deploy to Railway/Render
+### Week 3 (Completed)
+- [x] Swagger/OpenAPI documentation
+- [x] Seed data (15 example incidents)
+- [x] Similarity search endpoint
+- [x] Deploy to Render
 - [ ] CI/CD pipeline
 
 ### Future Enhancements
