@@ -38,6 +38,7 @@ The API is deployed and publicly accessible on Render:
 - [Testing](#-testing)
 - [Project Structure](#-project-structure)
 - [Environment Variables](#-environment-variables)
+- [Screenshots](#-screenshots)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -527,6 +528,22 @@ This project demonstrates:
 - [ ] Email notifications
 - [ ] Advanced analytics dashboard
 - [ ] Integration with Slack/Teams
+
+---
+
+## 📸 Screenshots
+
+### Swagger UI — Available Endpoints
+![Swagger UI endpoints](docs/screenshots/swaggerUI_endpoints.png)
+
+### POST /api/incidents — Create Incident
+![Create incident](docs/screenshots/swagger_post.png)
+
+### GET /api/incidents — List Incidents
+![List incidents](docs/screenshots/swagger_get_api_incidents.png)
+
+### GET /api/incidents/metrics — Dashboard Metrics
+![Metrics](docs/screenshots/swagger_get_api_incidents_metrics.png)
 
 ---
 
