@@ -545,6 +545,9 @@ This project demonstrates:
 ### GET /api/incidents/metrics — Dashboard Metrics
 ![Metrics](docs/screenshots/swagger_get_api_incidents_metrics.png)
 
+### AI Analysis — Automatic Incident Classification
+![AI-powered incident analysis in action](docs/screenshots/ai-analysis-response.png)
+
 ---
 
 ## 👨‍💻 Author
