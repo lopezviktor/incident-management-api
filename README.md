@@ -8,6 +8,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 [![Live](https://img.shields.io/badge/Live-Render-46E3B7.svg)](https://incident-management-api-w1zj.onrender.com)
+[![CI](https://github.com/lopezviktor/incident-management-api/actions/workflows/ci.yml/badge.svg)](https://github.com/lopezviktor/incident-management-api/actions/workflows/ci.yml)
 
 ---
 
@@ -592,7 +593,7 @@ This project demonstrates:
 - [x] Seed data (15 example incidents)
 - [x] Similarity search endpoint
 - [x] Deploy to Render
-- [ ] CI/CD pipeline
+- [x] CI/CD pipeline (GitHub Actions)
 
 ### Future Enhancements
 - [x] Authentication & authorization (Spring Security + JWT)
