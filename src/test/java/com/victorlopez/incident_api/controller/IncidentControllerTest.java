@@ -5,12 +5,15 @@ import com.victorlopez.incident_api.dto.IncidentResponse;
 import com.victorlopez.incident_api.model.Category;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
+import com.victorlopez.incident_api.config.SecurityConfig;
 import com.victorlopez.incident_api.service.IncidentService;
+import com.victorlopez.incident_api.service.JwtService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -24,6 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(IncidentController.class)
+@Import(SecurityConfig.class)
 class IncidentControllerTest {
 
     @Autowired
@@ -31,6 +35,9 @@ class IncidentControllerTest {
 
     @MockBean
     private IncidentService incidentService;
+
+    @MockBean
+    private JwtService jwtService;
 
     @Autowired
     private ObjectMapper objectMapper;
