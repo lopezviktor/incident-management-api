@@ -88,8 +88,14 @@ This is a **portfolio project** built to demonstrate:
 - Average resolution time tracking
 - Open critical incidents monitoring
 
+### 🔐 JWT Authentication
+- Register and login endpoints with BCrypt password hashing
+- Stateless JWT tokens for secure API access
+- Role-based access control (USER, ADMIN)
+- Protected endpoints require `Authorization: Bearer <token>` header
+
 ### 🧪 Production-Ready
-- Comprehensive test coverage (17 unit tests)
+- Comprehensive test coverage (46 unit tests)
 - Docker Compose for easy local development
 - Environment-based configuration
 - Structured error handling with custom exceptions
@@ -102,6 +108,7 @@ This is a **portfolio project** built to demonstrate:
 |-------|-----------|---------|
 | **Backend** | Java 21, Spring Boot 3.4.2 | Core application framework |
 | **AI** | Spring AI, OpenAI GPT-4o-mini | Incident analysis and classification |
+| **Security** | Spring Security, JWT (jjwt 0.12.6) | Authentication and authorization |
 | **Database** | PostgreSQL 16 | Persistent data storage |
 | **ORM** | Spring Data JPA + Hibernate | Database abstraction |
 | **Testing** | JUnit 5, Mockito, AssertJ | Unit and integration testing |
@@ -218,6 +225,13 @@ This is a **portfolio project** built to demonstrate:
 
 ## 📡 API Endpoints
 
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register` | Register a new user account |
+| `POST` | `/api/auth/login` | Login and receive a JWT token |
+
 ### Incidents
 
 | Method | Endpoint | Description |
@@ -227,6 +241,55 @@ This is a **portfolio project** built to demonstrate:
 | `GET` | `/api/incidents/{id}` | Get incident by ID |
 | `PATCH` | `/api/incidents/{id}/status` | Update incident status |
 | `GET` | `/api/incidents/metrics` | Get dashboard metrics |
+
+### Example: Register & Login
+
+**Register:**
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "john",
+    "email": "john@example.com",
+    "password": "secret123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "username": "john",
+  "role": "USER"
+}
+```
+
+**Login:**
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "john",
+    "password": "secret123"
+  }'
+```
+
+**Using the token on protected endpoints:**
+```bash
+TOKEN="eyJhbGciOiJIUzI1NiJ9..."
+
+curl http://localhost:8080/api/incidents \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -X POST http://localhost:8080/api/incidents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Database connection pool exhausted",
+    "description": "Production API failing to connect to PostgreSQL.",
+    "reportedBy": "ops-team"
+  }'
+```
 
 ### Example: Create Incident
 
@@ -369,10 +432,11 @@ The project follows **Test-Driven Development (TDD)** principles.
 
 ### Test Coverage
 
-- ✅ **17 unit tests** passing
+- ✅ **46 unit tests** passing
 - ✅ Service layer fully tested with Mockito
 - ✅ AI service tested with mocked OpenAI responses
 - ✅ Repository layer tested with H2 in-memory database
+- ✅ JWT and auth flows fully covered
 
 ### Test Structure
 
@@ -380,7 +444,12 @@ The project follows **Test-Driven Development (TDD)** principles.
 src/test/java/
 ├── service/
 │   ├── IncidentServiceTest.java      (6 tests)
-│   └── AIAnalysisServiceTest.java    (7 tests)
+│   ├── AIAnalysisServiceTest.java    (7 tests)
+│   ├── JwtServiceTest.java           (7 tests)
+│   └── AuthServiceTest.java          (6 tests)
+├── controller/
+│   ├── IncidentControllerTest.java   (10 tests)
+│   └── AuthControllerTest.java       (6 tests)
 └── repository/
     └── IncidentRepositoryTest.java   (4 tests)
 ```
@@ -462,6 +531,10 @@ POSTGRES_DB=incident_db
 
 # OpenAI Configuration
 OPENAI_API_KEY=sk-proj-your-api-key-here
+
+# JWT Configuration
+JWT_SECRET=your-256-bit-secret-key-here
+JWT_EXPIRATION=86400000
 ```
 
 ### Application Properties
@@ -522,7 +595,7 @@ This project demonstrates:
 - [ ] CI/CD pipeline
 
 ### Future Enhancements
-- [ ] Authentication & authorization (Spring Security + JWT)
+- [x] Authentication & authorization (Spring Security + JWT)
 - [ ] WebSocket for real-time updates
 - [ ] Incident attachments (file upload)
 - [ ] Email notifications
