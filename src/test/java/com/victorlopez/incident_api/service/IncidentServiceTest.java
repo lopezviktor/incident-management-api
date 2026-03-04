@@ -16,6 +16,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -115,9 +119,10 @@ class IncidentServiceTest {
     }
 
     @Test
-    @DisplayName("Should return all incidents when no filters applied")
+    @DisplayName("Should return paginated incidents when no filters applied")
     void shouldReturnAllIncidents() {
         // ARRANGE
+        Pageable pageable = PageRequest.of(0, 20);
         List<Incident> incidents = List.of(
                 Incident.builder()
                         .id(UUID.randomUUID())
@@ -139,19 +144,21 @@ class IncidentServiceTest {
                         .build()
         );
 
-        when(incidentRepository.findAll()).thenReturn(incidents);
+        when(incidentRepository.findAll(pageable)).thenReturn(new PageImpl<>(incidents));
 
         // ACT
-        List<IncidentResponse> responses = incidentService.getAllIncidents(null, null);
+        Page<IncidentResponse> responses = incidentService.getAllIncidents(null, null, pageable);
 
         // ASSERT
-        assertThat(responses).hasSize(2);
+        assertThat(responses.getContent()).hasSize(2);
+        assertThat(responses.getTotalElements()).isEqualTo(2);
     }
 
     @Test
     @DisplayName("Should filter incidents by status")
     void shouldFilterIncidentsByStatus() {
         // ARRANGE
+        Pageable pageable = PageRequest.of(0, 20);
         List<Incident> openIncidents = List.of(
                 Incident.builder()
                         .id(UUID.randomUUID())
@@ -164,14 +171,14 @@ class IncidentServiceTest {
                         .build()
         );
 
-        when(incidentRepository.findByStatus(Status.OPEN)).thenReturn(openIncidents);
+        when(incidentRepository.findByStatus(Status.OPEN, pageable)).thenReturn(new PageImpl<>(openIncidents));
 
         // ACT
-        List<IncidentResponse> responses = incidentService.getAllIncidents(Status.OPEN, null);
+        Page<IncidentResponse> responses = incidentService.getAllIncidents(Status.OPEN, null, pageable);
 
         // ASSERT
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getStatus()).isEqualTo(Status.OPEN);
+        assertThat(responses.getContent()).hasSize(1);
+        assertThat(responses.getContent().get(0).getStatus()).isEqualTo(Status.OPEN);
     }
 
     @Test

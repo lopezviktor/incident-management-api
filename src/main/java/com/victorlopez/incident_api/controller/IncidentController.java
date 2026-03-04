@@ -14,10 +14,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -44,15 +48,16 @@ public class IncidentController {
     }
 
     @GetMapping
-    @Operation(summary = "Get all incidents", description = "Retrieves all incidents with optional filtering by status and severity")
+    @Operation(summary = "Get all incidents", description = "Retrieves incidents with optional filtering by status and severity. Supports pagination via page, size, and sort query parameters.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Incidents retrieved successfully"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
-    public ResponseEntity<List<IncidentResponse>> getAllIncidents(
+    public ResponseEntity<Page<IncidentResponse>> getAllIncidents(
             @Parameter(description = "Filter by incident status") @RequestParam(required = false) Status status,
-            @Parameter(description = "Filter by incident severity") @RequestParam(required = false) Severity severity) {
-        List<IncidentResponse> incidents = incidentService.getAllIncidents(status, severity);
+            @Parameter(description = "Filter by incident severity") @RequestParam(required = false) Severity severity,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<IncidentResponse> incidents = incidentService.getAllIncidents(status, severity, pageable);
         return ResponseEntity.ok(incidents);
     }
 

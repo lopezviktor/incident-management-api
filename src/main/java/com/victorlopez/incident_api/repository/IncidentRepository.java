@@ -4,6 +4,8 @@ import com.victorlopez.incident_api.model.Category;
 import com.victorlopez.incident_api.model.Incident;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +22,12 @@ public interface IncidentRepository extends JpaRepository<Incident, UUID> {
     List<Incident> findBySeverity(Severity severity);
 
     List<Incident> findByStatusAndSeverity(Status status, Severity severity);
+
+    Page<Incident> findByStatus(Status status, Pageable pageable);
+
+    Page<Incident> findBySeverity(Severity severity, Pageable pageable);
+
+    Page<Incident> findByStatusAndSeverity(Status status, Severity severity, Pageable pageable);
 
     long countByStatus(Status status);
 

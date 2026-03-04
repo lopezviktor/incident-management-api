@@ -9,7 +9,10 @@ import com.victorlopez.incident_api.model.Status;
 import com.victorlopez.incident_api.repository.IncidentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -21,6 +24,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional
 public class IncidentService {
 
     private final IncidentRepository incidentRepository;
@@ -29,7 +33,6 @@ public class IncidentService {
     public IncidentResponse createIncident(CreateIncidentRequest request) {
         log.info("Creating incident: {}", request.getTitle());
 
-        // NUEVO: Análisis con AI
         AIAnalysisResult aiAnalysis = aiAnalysisService.analyzeIncident(
                 request.getTitle(),
                 request.getDescription()
@@ -38,12 +41,10 @@ public class IncidentService {
         log.info("AI analysis - Severity: {}, Category: {}",
                 aiAnalysis.severity(), aiAnalysis.category());
 
-        // Crear incident con datos de AI
         Incident incident = Incident.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .reportedBy(request.getReportedBy())
-                // Datos del AI
                 .severity(aiAnalysis.severity())
                 .category(aiAnalysis.category())
                 .assignedTeam(aiAnalysis.assignedTeam())
@@ -66,22 +67,21 @@ public class IncidentService {
         return mapToResponse(incident);
     }
 
-    public List<IncidentResponse> getAllIncidents(Status status, Severity severity) {
-        List<Incident> incidents;
+    @Transactional(readOnly = true)
+    public Page<IncidentResponse> getAllIncidents(Status status, Severity severity, Pageable pageable) {
+        Page<Incident> incidents;
 
         if (status != null && severity != null) {
-            incidents = incidentRepository.findByStatusAndSeverity(status, severity);
+            incidents = incidentRepository.findByStatusAndSeverity(status, severity, pageable);
         } else if (status != null) {
-            incidents = incidentRepository.findByStatus(status);
+            incidents = incidentRepository.findByStatus(status, pageable);
         } else if (severity != null) {
-            incidents = incidentRepository.findBySeverity(severity);
+            incidents = incidentRepository.findBySeverity(severity, pageable);
         } else {
-            incidents = incidentRepository.findAll();
+            incidents = incidentRepository.findAll(pageable);
         }
 
-        return incidents.stream()
-                .map(this::mapToResponse)
-                .toList();
+        return incidents.map(this::mapToResponse);
     }
 
     public IncidentResponse updateStatus(UUID id, UpdateStatusRequest request) {

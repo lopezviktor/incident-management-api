@@ -9,11 +9,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "incidents")
+@Table(name = "incidents", indexes = {
+        @Index(name = "idx_incident_status", columnList = "status"),
+        @Index(name = "idx_incident_severity", columnList = "severity"),
+        @Index(name = "idx_incident_category", columnList = "category"),
+        @Index(name = "idx_incident_created_at", columnList = "createdAt")
+})
 @Data
 @Builder
 @NoArgsConstructor
@@ -61,12 +65,6 @@ public class Incident {
     private String actualResolution;
 
     private Double aiConfidence;
-
-    @ElementCollection
-    @CollectionTable(name = "incident_similar_ids",
-            joinColumns = @JoinColumn(name = "incident_id"))
-    @Column(name = "similar_incident_id")
-    private List<UUID> similarIncidentIds;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
