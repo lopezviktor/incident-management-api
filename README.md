@@ -96,7 +96,10 @@ This is a **portfolio project** built to demonstrate:
 - Protected endpoints require `Authorization: Bearer <token>` header
 
 ### 🧪 Production-Ready
-- Comprehensive test coverage (46 unit tests)
+- Comprehensive test coverage (56 unit tests)
+- Paginated API responses with configurable page size and sorting
+- Database indexes on all frequently queried columns
+- CORS configuration and tightened actuator exposure
 - Docker Compose for easy local development
 - Environment-based configuration
 - Structured error handling with custom exceptions
@@ -238,10 +241,11 @@ This is a **portfolio project** built to demonstrate:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/incidents` | Create incident (triggers AI analysis) |
-| `GET` | `/api/incidents` | List all incidents (with filters) |
+| `GET` | `/api/incidents` | List incidents — paginated, filterable by `status` and `severity` |
 | `GET` | `/api/incidents/{id}` | Get incident by ID |
 | `PATCH` | `/api/incidents/{id}/status` | Update incident status |
 | `GET` | `/api/incidents/metrics` | Get dashboard metrics |
+| `GET` | `/api/incidents/similar` | Find similar incidents by keyword |
 
 ### Example: Register & Login
 
@@ -276,12 +280,17 @@ curl -X POST http://localhost:8080/api/auth/login \
 ```
 
 **Using the token on protected endpoints:**
+
+All write operations (`POST`, `PATCH`) require the JWT token in the `Authorization` header:
+
 ```bash
-TOKEN="eyJhbGciOiJIUzI1NiJ9..."
+# 1. Login and capture the token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "john", "password": "secret123"}' \
+  | jq -r '.token')
 
-curl http://localhost:8080/api/incidents \
-  -H "Authorization: Bearer $TOKEN"
-
+# 2. Create an incident (requires auth)
 curl -X POST http://localhost:8080/api/incidents \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -290,7 +299,20 @@ curl -X POST http://localhost:8080/api/incidents \
     "description": "Production API failing to connect to PostgreSQL.",
     "reportedBy": "ops-team"
   }'
+
+# 3. Update incident status (requires auth)
+curl -X PATCH http://localhost:8080/api/incidents/{id}/status \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "RESOLVED", "actualResolution": "Increased pool size to 20"}'
+
+# GET endpoints are public — no token needed
+curl http://localhost:8080/api/incidents
+curl http://localhost:8080/api/incidents/{id}
+curl http://localhost:8080/api/incidents/metrics
 ```
+
+> **Swagger UI**: Click the **Authorize** button (🔒) at the top of the Swagger page, paste your token, and all requests will include it automatically.
 
 ### Example: Create Incident
 
@@ -326,17 +348,41 @@ curl -X POST http://localhost:8080/api/incidents \
 }
 ```
 
-### Example: Filter Incidents
+### Example: List Incidents (Pagination & Filters)
+
+The `GET /api/incidents` endpoint is paginated by default (20 items per page, sorted by `createdAt` descending).
 
 ```bash
-# Get all OPEN incidents
+# Default — first page, 20 results, newest first
+curl "http://localhost:8080/api/incidents"
+
+# Page 2 with 10 results per page
+curl "http://localhost:8080/api/incidents?page=1&size=10"
+
+# Filter by status
 curl "http://localhost:8080/api/incidents?status=OPEN"
 
-# Get all CRITICAL severity incidents
-curl "http://localhost:8080/api/incidents?severity=CRITICAL"
+# Filter by severity, custom page size
+curl "http://localhost:8080/api/incidents?severity=CRITICAL&size=5"
 
-# Combine filters
+# Combine status + severity filters
 curl "http://localhost:8080/api/incidents?status=OPEN&severity=HIGH"
+
+# Sort by a different field
+curl "http://localhost:8080/api/incidents?sort=severity,asc"
+```
+
+**Paginated response format:**
+```json
+{
+  "content": [ ... ],
+  "totalElements": 42,
+  "totalPages": 3,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": false
+}
 ```
 
 ### Example: Get Metrics
@@ -433,26 +479,29 @@ The project follows **Test-Driven Development (TDD)** principles.
 
 ### Test Coverage
 
-- ✅ **46 unit tests** passing
+- ✅ **56 unit tests** passing
+- ✅ All REST endpoints covered at the controller layer
 - ✅ Service layer fully tested with Mockito
 - ✅ AI service tested with mocked OpenAI responses
 - ✅ Repository layer tested with H2 in-memory database
 - ✅ JWT and auth flows fully covered
+- ✅ Pagination, validation, and error responses verified
 
 ### Test Structure
 
 ```
 src/test/java/
 ├── service/
-│   ├── IncidentServiceTest.java      (6 tests)
+│   ├── IncidentServiceTest.java      (9 tests)
 │   ├── AIAnalysisServiceTest.java    (7 tests)
 │   ├── JwtServiceTest.java           (7 tests)
 │   └── AuthServiceTest.java          (6 tests)
 ├── controller/
-│   ├── IncidentControllerTest.java   (10 tests)
+│   ├── IncidentControllerTest.java   (14 tests)
 │   └── AuthControllerTest.java       (6 tests)
-└── repository/
-    └── IncidentRepositoryTest.java   (4 tests)
+├── repository/
+│   └── IncidentRepositoryTest.java   (6 tests)
+└── IncidentApiApplicationTests.java  (1 test)
 ```
 
 ### Running Specific Tests
@@ -583,6 +632,12 @@ This project demonstrates:
 - Meaningful naming conventions
 - Comprehensive logging
 - Documentation with JavaDoc
+
+### 5. **Production Engineering Decisions**
+- **Pagination**: `GET /api/incidents` returns `Page<T>` with `Pageable` support — essential for APIs that serve large datasets without blowing up memory or response times
+- **Database indexing**: `@Index` annotations on `status`, `severity`, `category`, and `createdAt` — the columns used in every filter and sort query, making lookups O(log n) instead of full table scans
+- **Security hardening**: CORS configured via `CorsConfigurationSource` bean (environment-driven allowed origins); actuator exposure narrowed to `/health` and `/info` only; `MissingServletRequestParameterException` handled explicitly to return `400` instead of leaking a `500`
+- **Transactional correctness**: `@Transactional` on the service layer, with `readOnly = true` on queries to hint the connection pool and avoid dirty-read overhead
 
 ---
 
