@@ -586,17 +586,17 @@ This project demonstrates:
 
 ---
 
-## 🔮 Roadmap
+## 📍 Roadmap
 
 ### Week 3 (Completed)
 - [x] Swagger/OpenAPI documentation
 - [x] Seed data (15 example incidents)
 - [x] Similarity search endpoint
 - [x] Deploy to Render
+- [x] Authentication & authorization (Spring Security + JWT)
 - [x] CI/CD pipeline (GitHub Actions)
 
 ### Future Enhancements
-- [x] Authentication & authorization (Spring Security + JWT)
 - [ ] WebSocket for real-time updates
 - [ ] Incident attachments (file upload)
 - [ ] Email notifications
