@@ -20,6 +20,9 @@ RUN ./mvnw clean package -DskipTests
 # Production stage
 FROM eclipse-temurin:21-jre-alpine AS production
 
+# Install wget for health checks (curl is not included in jre-alpine)
+RUN apk add --no-cache wget
+
 # Create non-root user for security
 RUN addgroup -g 1001 -S appuser && \
     adduser -S appuser -u 1001
@@ -36,9 +39,9 @@ USER appuser
 # Expose port
 EXPOSE 8080
 
-# Health check
+# Health check — uses $PORT so it works with Render's dynamic port assignment
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/actuator/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/actuator/health || exit 1
 
 # Run the application with optimized JVM settings for containers
 ENTRYPOINT ["java", \
