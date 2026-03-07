@@ -677,6 +677,12 @@ This project demonstrates:
 ### AI Analysis — Automatic Incident Classification
 ![AI-powered incident analysis in action](docs/screenshots/ai-analysis-response.png)
 
+### JWT Authentication — Register returns token
+![JWT Authentication — Register returns token](docs/screenshots/jwt-register-response.png)
+
+### Bearer token authorization in Swagger UI
+![Bearer token authorization in Swagger UI](docs/screenshots/jwt-authorized.png)
+
 ---
 
 ## 👨‍💻 Author
