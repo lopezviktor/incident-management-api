@@ -66,6 +66,10 @@ public class Incident {
 
     private Double aiConfidence;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean archived = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

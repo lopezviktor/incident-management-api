@@ -177,4 +177,78 @@ class IncidentRepositoryTest {
         // ASSERT
         assertThat(similarIncidents).isEmpty();
     }
+
+    // ==================== Soft Delete (archived) ====================
+
+    @Test
+    @DisplayName("findByArchivedFalse - Should exclude archived incidents")
+    void shouldExcludeArchivedIncidentsFromFindByArchivedFalse() {
+        // ARRANGE
+        incidentRepository.save(Incident.builder()
+                .title("Active incident")
+                .description("This incident is still active and visible")
+                .severity(Severity.HIGH)
+                .status(Status.OPEN)
+                .archived(false)
+                .build());
+
+        incidentRepository.save(Incident.builder()
+                .title("Archived incident")
+                .description("This incident has been soft deleted and should be hidden")
+                .severity(Severity.LOW)
+                .status(Status.CLOSED)
+                .archived(true)
+                .build());
+
+        // ACT
+        List<Incident> visible = incidentRepository.findByArchivedFalse();
+
+        // ASSERT
+        assertThat(visible).hasSize(1);
+        assertThat(visible.get(0).getTitle()).isEqualTo("Active incident");
+    }
+
+    @Test
+    @DisplayName("findByIdAndArchivedFalse - Should not find archived incident by ID")
+    void shouldNotFindArchivedIncidentById() {
+        // ARRANGE
+        Incident archived = incidentRepository.save(Incident.builder()
+                .title("Archived incident to fetch")
+                .description("This was archived and should not be retrievable")
+                .severity(Severity.LOW)
+                .status(Status.CLOSED)
+                .archived(true)
+                .build());
+
+        // ACT & ASSERT
+        assertThat(incidentRepository.findByIdAndArchivedFalse(archived.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findSimilarIncidents - Should exclude archived incidents from similarity search")
+    void shouldExcludeArchivedIncidentsFromSimilaritySearch() {
+        // ARRANGE
+        Incident active = incidentRepository.save(Incident.builder()
+                .title("Database timeout active")
+                .description("PostgreSQL connection pool exhausted in production")
+                .severity(Severity.HIGH)
+                .status(Status.OPEN)
+                .archived(false)
+                .build());
+
+        incidentRepository.save(Incident.builder()
+                .title("Database timeout archived")
+                .description("PostgreSQL connection archived and hidden from results")
+                .severity(Severity.MEDIUM)
+                .status(Status.CLOSED)
+                .archived(true)
+                .build());
+
+        // ACT — search with a different excludeId so both would otherwise match
+        List<Incident> similar = incidentRepository.findSimilarIncidents("database", UUID.randomUUID());
+
+        // ASSERT — only the active one is returned
+        assertThat(similar).hasSize(1);
+        assertThat(similar.get(0).getId()).isEqualTo(active.getId());
+    }
 }

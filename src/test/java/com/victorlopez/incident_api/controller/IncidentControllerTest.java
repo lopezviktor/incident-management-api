@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
 import com.victorlopez.incident_api.dto.IncidentResponse;
 import com.victorlopez.incident_api.dto.MetricsResponse;
+import com.victorlopez.incident_api.dto.UpdateIncidentRequest;
 import com.victorlopez.incident_api.dto.UpdateStatusRequest;
 import com.victorlopez.incident_api.exception.IncidentNotFoundException;
 import com.victorlopez.incident_api.model.Category;
@@ -14,6 +15,7 @@ import com.victorlopez.incident_api.service.IncidentService;
 import com.victorlopez.incident_api.service.JwtService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -28,8 +30,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -134,7 +140,7 @@ class IncidentControllerTest {
     // ==================== GET /api/incidents ====================
 
     @Test
-    @DisplayName("GET /api/incidents - Should return paginated list of incidents")
+    @DisplayName("GET /api/incidents - Should return paginated list of incidents (no auth)")
     void shouldReturnPaginatedIncidents() throws Exception {
         // ARRANGE
         List<IncidentResponse> incidentList = List.of(
@@ -160,7 +166,7 @@ class IncidentControllerTest {
                         .build()
         );
 
-        when(incidentService.getAllIncidents(any(), any(), any(Pageable.class)))
+        when(incidentService.getAllIncidents(any(), any(), any(Pageable.class), any()))
                 .thenReturn(new PageImpl<>(incidentList));
 
         // ACT & ASSERT
@@ -190,7 +196,7 @@ class IncidentControllerTest {
                         .build()
         );
 
-        when(incidentService.getAllIncidents(eq(Status.OPEN), any(), any(Pageable.class)))
+        when(incidentService.getAllIncidents(eq(Status.OPEN), any(), any(Pageable.class), any()))
                 .thenReturn(new PageImpl<>(openIncidents));
 
         // ACT & ASSERT
@@ -198,6 +204,44 @@ class IncidentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].status").value("OPEN"));
+    }
+
+    // ==================== Step 5: USER vs ADMIN scoping ====================
+
+    @Test
+    @DisplayName("GET /api/incidents - USER role: service called with own username as filter")
+    void shouldPassUsernameFilterForUserRole() throws Exception {
+        // ARRANGE
+        when(incidentService.getAllIncidents(any(), any(), any(Pageable.class), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // ACT
+        mockMvc.perform(get("/api/incidents")
+                        .with(user("alice").roles("USER")))
+                .andExpect(status().isOk());
+
+        // ASSERT — service must be called with "alice" as the reportedBy filter
+        ArgumentCaptor<String> reportedByCaptor = ArgumentCaptor.forClass(String.class);
+        verify(incidentService).getAllIncidents(any(), any(), any(Pageable.class), reportedByCaptor.capture());
+        assertThat(reportedByCaptor.getValue()).isEqualTo("alice");
+    }
+
+    @Test
+    @DisplayName("GET /api/incidents - ADMIN role: service called with null filter (sees all)")
+    void shouldPassNullFilterForAdminRole() throws Exception {
+        // ARRANGE
+        when(incidentService.getAllIncidents(any(), any(), any(Pageable.class), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // ACT
+        mockMvc.perform(get("/api/incidents")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        // ASSERT — service must be called with null (no restriction)
+        ArgumentCaptor<String> reportedByCaptor = ArgumentCaptor.forClass(String.class);
+        verify(incidentService).getAllIncidents(any(), any(), any(Pageable.class), reportedByCaptor.capture());
+        assertThat(reportedByCaptor.getValue()).isNull();
     }
 
     // ==================== GET /api/incidents/{id} ====================
@@ -299,6 +343,131 @@ class IncidentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
+    }
+
+    // ==================== DELETE /api/incidents/{id} (ADMIN only) ====================
+
+    @Test
+    @DisplayName("DELETE /api/incidents/{id} - USER role should get 403")
+    void shouldReturn403WhenUserDeletesIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/incidents/{id}", id)
+                        .with(user("testuser").roles("USER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/incidents/{id} - ADMIN role should get 204")
+    void shouldReturn204WhenAdminDeletesIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+        doNothing().when(incidentService).deleteIncident(id);
+
+        mockMvc.perform(delete("/api/incidents/{id}", id)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNoContent());
+
+        verify(incidentService).deleteIncident(id);
+    }
+
+    @Test
+    @DisplayName("DELETE /api/incidents/{id} - Should return 404 when incident not found")
+    void shouldReturn404WhenAdminDeletesNonExistentIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new IncidentNotFoundException(id))
+                .when(incidentService).deleteIncident(id);
+
+        mockMvc.perform(delete("/api/incidents/{id}", id)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound());
+    }
+
+    // ==================== PUT /api/incidents/{id} (ADMIN only) ====================
+
+    @Test
+    @DisplayName("PUT /api/incidents/{id} - USER role should get 403")
+    void shouldReturn403WhenUserUpdatesIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+        UpdateIncidentRequest request = UpdateIncidentRequest.builder()
+                .title("New title for test").build();
+
+        mockMvc.perform(put("/api/incidents/{id}", id)
+                        .with(user("testuser").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("PUT /api/incidents/{id} - ADMIN role should get 200 with updated incident")
+    void shouldReturn200WhenAdminUpdatesIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+        UpdateIncidentRequest request = UpdateIncidentRequest.builder()
+                .title("Updated title by admin")
+                .severity(Severity.HIGH)
+                .build();
+
+        IncidentResponse response = IncidentResponse.builder()
+                .id(id)
+                .title("Updated title by admin")
+                .description("Original description remains")
+                .severity(Severity.HIGH)
+                .status(Status.OPEN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        when(incidentService.updateIncident(eq(id), any(UpdateIncidentRequest.class))).thenReturn(response);
+
+        mockMvc.perform(put("/api/incidents/{id}", id)
+                        .with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Updated title by admin"))
+                .andExpect(jsonPath("$.severity").value("HIGH"));
+    }
+
+    // ==================== POST /api/incidents/{id}/analyze (ADMIN only) ====================
+
+    @Test
+    @DisplayName("POST /api/incidents/{id}/analyze - USER role should get 403")
+    void shouldReturn403WhenUserReanalyzesIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/incidents/{id}/analyze", id)
+                        .with(user("testuser").roles("USER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /api/incidents/{id}/analyze - ADMIN role should get 200 with updated analysis")
+    void shouldReturn200WhenAdminReanalyzesIncident() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        IncidentResponse response = IncidentResponse.builder()
+                .id(id)
+                .title("Database connection timeout")
+                .description("PostgreSQL pool exhausted")
+                .severity(Severity.CRITICAL)
+                .category(Category.DATABASE)
+                .assignedTeam("Database Team")
+                .aiConfidence(0.97)
+                .status(Status.OPEN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        when(incidentService.reanalyzeIncident(id)).thenReturn(response);
+
+        mockMvc.perform(post("/api/incidents/{id}/analyze", id)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.severity").value("CRITICAL"))
+                .andExpect(jsonPath("$.category").value("DATABASE"))
+                .andExpect(jsonPath("$.aiConfidence").value(0.97));
+
+        verify(incidentService).reanalyzeIncident(id);
     }
 
     // ==================== GET /api/incidents/metrics ====================

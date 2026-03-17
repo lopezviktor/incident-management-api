@@ -4,7 +4,9 @@ import com.victorlopez.incident_api.dto.AIAnalysisResult;
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
 import com.victorlopez.incident_api.dto.IncidentResponse;
 import com.victorlopez.incident_api.dto.MetricsResponse;
+import com.victorlopez.incident_api.dto.UpdateIncidentRequest;
 import com.victorlopez.incident_api.dto.UpdateStatusRequest;
+import com.victorlopez.incident_api.exception.IncidentNotFoundException;
 import com.victorlopez.incident_api.model.Category;
 import com.victorlopez.incident_api.model.Incident;
 import com.victorlopez.incident_api.model.Severity;
@@ -54,7 +56,6 @@ class IncidentServiceTest {
         request.setDescription("Users getting internal server error on checkout endpoint");
         request.setReportedBy("victor.lopez");
 
-        // Mock AI analysis result
         AIAnalysisResult mockAIResult = new AIAnalysisResult(
                 Severity.HIGH,
                 Category.BACKEND,
@@ -97,7 +98,6 @@ class IncidentServiceTest {
         assertThat(response.getAssignedTeam()).isEqualTo("Backend Team");
         assertThat(response.getAiConfidence()).isEqualTo(0.88);
 
-        // Verify AI was called
         verify(aiAnalysisService).analyzeIncident(
                 "API endpoint returning 500",
                 "Users getting internal server error on checkout endpoint"
@@ -110,7 +110,7 @@ class IncidentServiceTest {
     void shouldThrowExceptionWhenIncidentNotFound() {
         // ARRANGE
         UUID randomId = UUID.randomUUID();
-        when(incidentRepository.findById(randomId)).thenReturn(Optional.empty());
+        when(incidentRepository.findByIdAndArchivedFalse(randomId)).thenReturn(Optional.empty());
 
         // ASSERT
         assertThatThrownBy(() -> incidentService.getIncidentById(randomId))
@@ -119,7 +119,7 @@ class IncidentServiceTest {
     }
 
     @Test
-    @DisplayName("Should return paginated incidents when no filters applied")
+    @DisplayName("Should return paginated incidents when no filters applied (ADMIN view)")
     void shouldReturnAllIncidents() {
         // ARRANGE
         Pageable pageable = PageRequest.of(0, 20);
@@ -144,10 +144,10 @@ class IncidentServiceTest {
                         .build()
         );
 
-        when(incidentRepository.findAll(pageable)).thenReturn(new PageImpl<>(incidents));
+        when(incidentRepository.findByArchivedFalse(pageable)).thenReturn(new PageImpl<>(incidents));
 
         // ACT
-        Page<IncidentResponse> responses = incidentService.getAllIncidents(null, null, pageable);
+        Page<IncidentResponse> responses = incidentService.getAllIncidents(null, null, pageable, null);
 
         // ASSERT
         assertThat(responses.getContent()).hasSize(2);
@@ -155,7 +155,7 @@ class IncidentServiceTest {
     }
 
     @Test
-    @DisplayName("Should filter incidents by status")
+    @DisplayName("Should filter incidents by status (ADMIN view)")
     void shouldFilterIncidentsByStatus() {
         // ARRANGE
         Pageable pageable = PageRequest.of(0, 20);
@@ -171,14 +171,45 @@ class IncidentServiceTest {
                         .build()
         );
 
-        when(incidentRepository.findByStatus(Status.OPEN, pageable)).thenReturn(new PageImpl<>(openIncidents));
+        when(incidentRepository.findByStatusAndArchivedFalse(Status.OPEN, pageable))
+                .thenReturn(new PageImpl<>(openIncidents));
 
         // ACT
-        Page<IncidentResponse> responses = incidentService.getAllIncidents(Status.OPEN, null, pageable);
+        Page<IncidentResponse> responses = incidentService.getAllIncidents(Status.OPEN, null, pageable, null);
 
         // ASSERT
         assertThat(responses.getContent()).hasSize(1);
         assertThat(responses.getContent().get(0).getStatus()).isEqualTo(Status.OPEN);
+    }
+
+    @Test
+    @DisplayName("Should filter incidents by reportedBy when USER role (Step 5)")
+    void shouldFilterIncidentsByReportedByForUser() {
+        // ARRANGE
+        Pageable pageable = PageRequest.of(0, 20);
+        String username = "alice";
+        List<Incident> userIncidents = List.of(
+                Incident.builder()
+                        .id(UUID.randomUUID())
+                        .title("Alice incident")
+                        .description("Alice incident description")
+                        .severity(Severity.MEDIUM)
+                        .status(Status.OPEN)
+                        .reportedBy(username)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        when(incidentRepository.findByReportedByAndArchivedFalse(username, pageable))
+                .thenReturn(new PageImpl<>(userIncidents));
+
+        // ACT
+        Page<IncidentResponse> responses = incidentService.getAllIncidents(null, null, pageable, username);
+
+        // ASSERT
+        assertThat(responses.getContent()).hasSize(1);
+        assertThat(responses.getContent().get(0).getReportedBy()).isEqualTo(username);
     }
 
     @Test
@@ -212,7 +243,7 @@ class IncidentServiceTest {
                 .resolvedAt(LocalDateTime.now())
                 .build();
 
-        when(incidentRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(incidentRepository.findByIdAndArchivedFalse(id)).thenReturn(Optional.of(existing));
         when(incidentRepository.save(any(Incident.class))).thenReturn(updated);
 
         // ACT
@@ -223,15 +254,157 @@ class IncidentServiceTest {
     }
 
     @Test
-    @DisplayName("Should return metrics")
+    @DisplayName("Should soft-delete (archive) an incident")
+    void shouldArchiveIncident() {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        Incident existing = Incident.builder()
+                .id(id)
+                .title("Some incident")
+                .description("Some incident description")
+                .severity(Severity.LOW)
+                .status(Status.OPEN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        when(incidentRepository.findByIdAndArchivedFalse(id)).thenReturn(Optional.of(existing));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(existing);
+
+        // ACT
+        incidentService.deleteIncident(id);
+
+        // ASSERT
+        assertThat(existing.isArchived()).isTrue();
+        verify(incidentRepository).save(existing);
+    }
+
+    @Test
+    @DisplayName("Should throw IncidentNotFoundException when archiving non-existent incident")
+    void shouldThrowWhenArchivingNonExistentIncident() {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        when(incidentRepository.findByIdAndArchivedFalse(id)).thenReturn(Optional.empty());
+
+        // ASSERT
+        assertThatThrownBy(() -> incidentService.deleteIncident(id))
+                .isInstanceOf(IncidentNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("Should update incident fields (ADMIN full update)")
+    void shouldUpdateIncidentFields() {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        Incident existing = Incident.builder()
+                .id(id)
+                .title("Old title")
+                .description("Old description that is long enough")
+                .severity(Severity.LOW)
+                .category(Category.FRONTEND)
+                .status(Status.OPEN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        UpdateIncidentRequest request = UpdateIncidentRequest.builder()
+                .title("New updated title")
+                .severity(Severity.HIGH)
+                .build();
+
+        Incident saved = Incident.builder()
+                .id(id)
+                .title("New updated title")
+                .description(existing.getDescription())
+                .severity(Severity.HIGH)
+                .category(Category.FRONTEND)
+                .status(Status.OPEN)
+                .createdAt(existing.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        when(incidentRepository.findByIdAndArchivedFalse(id)).thenReturn(Optional.of(existing));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(saved);
+
+        // ACT
+        IncidentResponse response = incidentService.updateIncident(id, request);
+
+        // ASSERT
+        assertThat(response.getTitle()).isEqualTo("New updated title");
+        assertThat(response.getSeverity()).isEqualTo(Severity.HIGH);
+        verify(incidentRepository).save(existing);
+    }
+
+    @Test
+    @DisplayName("Should re-analyze incident and update AI fields (ADMIN)")
+    void shouldReanalyzeIncident() {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        Incident existing = Incident.builder()
+                .id(id)
+                .title("Database connection timeout")
+                .description("PostgreSQL pool exhausted under load")
+                .severity(Severity.LOW)
+                .category(Category.FRONTEND)
+                .assignedTeam("Frontend Team")
+                .suggestedSolution("Old solution")
+                .estimatedResolutionHours(1)
+                .aiConfidence(0.50)
+                .status(Status.OPEN)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        AIAnalysisResult newAnalysis = new AIAnalysisResult(
+                Severity.CRITICAL,
+                Category.DATABASE,
+                "Database Team",
+                "Increase connection pool size and add read replicas",
+                8,
+                0.95
+        );
+
+        Incident saved = Incident.builder()
+                .id(id)
+                .title(existing.getTitle())
+                .description(existing.getDescription())
+                .severity(Severity.CRITICAL)
+                .category(Category.DATABASE)
+                .assignedTeam("Database Team")
+                .suggestedSolution("Increase connection pool size and add read replicas")
+                .estimatedResolutionHours(8)
+                .aiConfidence(0.95)
+                .status(Status.OPEN)
+                .createdAt(existing.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        when(incidentRepository.findByIdAndArchivedFalse(id)).thenReturn(Optional.of(existing));
+        when(aiAnalysisService.analyzeIncident(existing.getTitle(), existing.getDescription()))
+                .thenReturn(newAnalysis);
+        when(incidentRepository.save(any(Incident.class))).thenReturn(saved);
+
+        // ACT
+        IncidentResponse response = incidentService.reanalyzeIncident(id);
+
+        // ASSERT
+        assertThat(response.getSeverity()).isEqualTo(Severity.CRITICAL);
+        assertThat(response.getCategory()).isEqualTo(Category.DATABASE);
+        assertThat(response.getAssignedTeam()).isEqualTo("Database Team");
+        assertThat(response.getAiConfidence()).isEqualTo(0.95);
+        verify(aiAnalysisService).analyzeIncident(existing.getTitle(), existing.getDescription());
+    }
+
+    @Test
+    @DisplayName("Should return metrics (excluding archived incidents)")
     void shouldReturnMetrics() {
         // ARRANGE
-        when(incidentRepository.count()).thenReturn(10L);
-        when(incidentRepository.countByStatus(any())).thenReturn(2L);
-        when(incidentRepository.countBySeverity(any())).thenReturn(3L);
-        when(incidentRepository.countByCategory(any())).thenReturn(1L);
+        when(incidentRepository.countByArchivedFalse()).thenReturn(10L);
+        when(incidentRepository.countByStatusAndArchivedFalse(any())).thenReturn(2L);
+        when(incidentRepository.countBySeverityAndArchivedFalse(any())).thenReturn(3L);
+        when(incidentRepository.countByCategoryAndArchivedFalse(any())).thenReturn(1L);
         when(incidentRepository.findAverageResolutionHours()).thenReturn(4.5);
-        when(incidentRepository.countByStatusAndSeverity(Status.OPEN, Severity.CRITICAL)).thenReturn(1L);
+        when(incidentRepository.countByStatusAndSeverityAndArchivedFalse(Status.OPEN, Severity.CRITICAL)).thenReturn(1L);
 
         // ACT
         MetricsResponse metrics = incidentService.getMetrics();
@@ -272,7 +445,7 @@ class IncidentServiceTest {
                         .build()
         );
 
-        when(incidentRepository.findAll()).thenReturn(similarIncidents);
+        when(incidentRepository.findByArchivedFalse()).thenReturn(similarIncidents);
 
         // ACT
         List<IncidentResponse> responses = incidentService.findSimilarIncidents(description, excludeId);
@@ -282,7 +455,7 @@ class IncidentServiceTest {
         assertThat(responses.get(0).getTitle()).isEqualTo("Database connection issues");
         assertThat(responses.get(1).getTitle()).isEqualTo("Timeout error on API calls");
 
-        verify(incidentRepository).findAll();
+        verify(incidentRepository).findByArchivedFalse();
     }
 
     @Test
@@ -292,14 +465,14 @@ class IncidentServiceTest {
         UUID excludeId = UUID.randomUUID();
         String description = "Very unique error that never happened before";
 
-        when(incidentRepository.findAll()).thenReturn(List.of());
+        when(incidentRepository.findByArchivedFalse()).thenReturn(List.of());
 
         // ACT
         List<IncidentResponse> responses = incidentService.findSimilarIncidents(description, excludeId);
 
         // ASSERT
         assertThat(responses).isEmpty();
-        verify(incidentRepository).findAll();
+        verify(incidentRepository).findByArchivedFalse();
     }
 
     @Test
@@ -309,12 +482,12 @@ class IncidentServiceTest {
         UUID excludeId = UUID.randomUUID();
         String description = "The database connection is timing out!";
 
-        when(incidentRepository.findAll()).thenReturn(List.of());
+        when(incidentRepository.findByArchivedFalse()).thenReturn(List.of());
 
         // ACT
         incidentService.findSimilarIncidents(description, excludeId);
 
         // ASSERT
-        verify(incidentRepository).findAll();
+        verify(incidentRepository).findByArchivedFalse();
     }
 }
