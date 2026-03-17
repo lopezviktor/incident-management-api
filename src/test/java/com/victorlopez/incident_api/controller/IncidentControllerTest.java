@@ -2,12 +2,14 @@ package com.victorlopez.incident_api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
+import com.victorlopez.incident_api.dto.IncidentActivityResponse;
 import com.victorlopez.incident_api.dto.IncidentResponse;
 import com.victorlopez.incident_api.dto.MetricsResponse;
 import com.victorlopez.incident_api.dto.UpdateIncidentRequest;
 import com.victorlopez.incident_api.dto.UpdateStatusRequest;
 import com.victorlopez.incident_api.exception.IncidentNotFoundException;
 import com.victorlopez.incident_api.model.Category;
+import com.victorlopez.incident_api.model.IncidentActivityAction;
 import com.victorlopez.incident_api.model.Severity;
 import com.victorlopez.incident_api.model.Status;
 import com.victorlopez.incident_api.config.SecurityConfig;
@@ -576,5 +578,84 @@ class IncidentControllerTest {
         mockMvc.perform(get("/api/incidents/similar")
                         .param("description", ""))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ==================== GET /api/incidents/{id}/activity ====================
+
+    @Test
+    @DisplayName("GET /api/incidents/{id}/activity - Authenticated user should get 200 with activity list")
+    void shouldReturnActivityLogForAuthenticatedUser() throws Exception {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        List<IncidentActivityResponse> activities = List.of(
+                IncidentActivityResponse.builder()
+                        .id(UUID.randomUUID())
+                        .incidentId(id)
+                        .action(IncidentActivityAction.CREATED)
+                        .performedBy("alice")
+                        .details("Incident created — severity: HIGH, category: BACKEND")
+                        .createdAt(LocalDateTime.now().minusMinutes(30))
+                        .build(),
+                IncidentActivityResponse.builder()
+                        .id(UUID.randomUUID())
+                        .incidentId(id)
+                        .action(IncidentActivityAction.STATUS_CHANGED)
+                        .performedBy("bob")
+                        .details("Status changed from OPEN to IN_PROGRESS")
+                        .createdAt(LocalDateTime.now())
+                        .build()
+        );
+
+        when(incidentService.getIncidentActivity(id)).thenReturn(activities);
+
+        // ACT & ASSERT
+        mockMvc.perform(get("/api/incidents/{id}/activity", id)
+                        .with(user("alice").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].action").value("CREATED"))
+                .andExpect(jsonPath("$[0].performedBy").value("alice"))
+                .andExpect(jsonPath("$[1].action").value("STATUS_CHANGED"))
+                .andExpect(jsonPath("$[1].performedBy").value("bob"));
+    }
+
+    @Test
+    @DisplayName("GET /api/incidents/{id}/activity - Unauthenticated request should get 403")
+    void shouldReturn403ForUnauthenticatedActivityRequest() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/incidents/{id}/activity", id))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/incidents/{id}/activity - Should return 404 when incident not found")
+    void shouldReturn404ForActivityOfNonExistentIncident() throws Exception {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        when(incidentService.getIncidentActivity(id))
+                .thenThrow(new IncidentNotFoundException(id));
+
+        // ACT & ASSERT
+        mockMvc.perform(get("/api/incidents/{id}/activity", id)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"));
+    }
+
+    @Test
+    @DisplayName("GET /api/incidents/{id}/activity - ADMIN role should also have access")
+    void shouldAllowAdminToGetActivityLog() throws Exception {
+        // ARRANGE
+        UUID id = UUID.randomUUID();
+        when(incidentService.getIncidentActivity(id)).thenReturn(List.of());
+
+        // ACT & ASSERT
+        mockMvc.perform(get("/api/incidents/{id}/activity", id)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 }

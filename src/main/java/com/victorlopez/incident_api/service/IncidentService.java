@@ -2,15 +2,16 @@ package com.victorlopez.incident_api.service;
 
 import com.victorlopez.incident_api.dto.*;
 import com.victorlopez.incident_api.exception.IncidentNotFoundException;
-import com.victorlopez.incident_api.model.Category;
-import com.victorlopez.incident_api.model.Incident;
-import com.victorlopez.incident_api.model.Severity;
-import com.victorlopez.incident_api.model.Status;
+import com.victorlopez.incident_api.model.*;
+import com.victorlopez.incident_api.repository.IncidentActivityRepository;
 import com.victorlopez.incident_api.repository.IncidentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class IncidentService {
 
     private final IncidentRepository incidentRepository;
+    private final IncidentActivityRepository incidentActivityRepository;
     private final AIAnalysisService aiAnalysisService;
 
     public IncidentResponse createIncident(CreateIncidentRequest request) {
@@ -57,6 +59,10 @@ public class IncidentService {
         Incident saved = incidentRepository.save(incident);
         log.info("Incident created with id: {}", saved.getId());
 
+        logActivity(saved, IncidentActivityAction.CREATED,
+                String.format("Incident created — severity: %s, category: %s",
+                        saved.getSeverity(), saved.getCategory()));
+
         return mapToResponse(saved);
     }
 
@@ -78,7 +84,6 @@ public class IncidentService {
         Page<Incident> incidents;
 
         if (reportedBy != null) {
-            // USER-scoped queries
             if (status != null && severity != null) {
                 incidents = incidentRepository.findByStatusAndSeverityAndReportedByAndArchivedFalse(status, severity, reportedBy, pageable);
             } else if (status != null) {
@@ -89,7 +94,6 @@ public class IncidentService {
                 incidents = incidentRepository.findByReportedByAndArchivedFalse(reportedBy, pageable);
             }
         } else {
-            // ADMIN / anonymous — all non-archived
             if (status != null && severity != null) {
                 incidents = incidentRepository.findByStatusAndSeverityAndArchivedFalse(status, severity, pageable);
             } else if (status != null) {
@@ -110,6 +114,7 @@ public class IncidentService {
         Incident incident = incidentRepository.findByIdAndArchivedFalse(id)
                 .orElseThrow(() -> new IncidentNotFoundException(id));
 
+        Status previousStatus = incident.getStatus();
         incident.setStatus(request.getStatus());
 
         if (request.getActualResolution() != null) {
@@ -121,19 +126,23 @@ public class IncidentService {
         }
 
         Incident updated = incidentRepository.save(incident);
+
+        logActivity(updated, IncidentActivityAction.STATUS_CHANGED,
+                String.format("Status changed from %s to %s", previousStatus, request.getStatus()));
+
         return mapToResponse(updated);
     }
 
-    // STEP 2 — soft delete
     public void deleteIncident(UUID id) {
         log.info("Archiving incident: {}", id);
         Incident incident = incidentRepository.findByIdAndArchivedFalse(id)
                 .orElseThrow(() -> new IncidentNotFoundException(id));
         incident.setArchived(true);
-        incidentRepository.save(incident);
+        Incident saved = incidentRepository.save(incident);
+
+        logActivity(saved, IncidentActivityAction.ARCHIVED, "Incident archived");
     }
 
-    // STEP 3 — full update (ADMIN only)
     public IncidentResponse updateIncident(UUID id, UpdateIncidentRequest request) {
         log.info("Updating incident: {}", id);
         Incident incident = incidentRepository.findByIdAndArchivedFalse(id)
@@ -144,10 +153,14 @@ public class IncidentService {
         if (request.getSeverity() != null) incident.setSeverity(request.getSeverity());
         if (request.getCategory() != null) incident.setCategory(request.getCategory());
 
-        return mapToResponse(incidentRepository.save(incident));
+        Incident saved = incidentRepository.save(incident);
+
+        logActivity(saved, IncidentActivityAction.UPDATED,
+                buildUpdateDetails(request));
+
+        return mapToResponse(saved);
     }
 
-    // STEP 4 — re-run AI analysis (ADMIN only)
     public IncidentResponse reanalyzeIncident(UUID id) {
         log.info("Re-analyzing incident: {}", id);
         Incident incident = incidentRepository.findByIdAndArchivedFalse(id)
@@ -163,7 +176,24 @@ public class IncidentService {
         incident.setEstimatedResolutionHours(analysis.estimatedResolutionHours());
         incident.setAiConfidence(analysis.confidence());
 
-        return mapToResponse(incidentRepository.save(incident));
+        Incident saved = incidentRepository.save(incident);
+
+        logActivity(saved, IncidentActivityAction.ANALYZED,
+                String.format("AI re-analysis completed — severity: %s, category: %s, confidence: %.2f",
+                        analysis.severity(), analysis.category(), analysis.confidence()));
+
+        return mapToResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IncidentActivityResponse> getIncidentActivity(UUID id) {
+        incidentRepository.findByIdAndArchivedFalse(id)
+                .orElseThrow(() -> new IncidentNotFoundException(id));
+
+        return incidentActivityRepository.findByIncidentIdOrderByCreatedAtAsc(id)
+                .stream()
+                .map(this::mapToActivityResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -219,6 +249,35 @@ public class IncidentService {
                 .build();
     }
 
+    // ── private helpers ──────────────────────────────────────────────────────
+
+    private void logActivity(Incident incident, IncidentActivityAction action, String details) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String performer = (auth != null && auth.isAuthenticated()
+                && !(auth instanceof AnonymousAuthenticationToken))
+                ? auth.getName()
+                : "system";
+
+        IncidentActivity activity = IncidentActivity.builder()
+                .incident(incident)
+                .action(action)
+                .performedBy(performer)
+                .details(details)
+                .build();
+
+        incidentActivityRepository.save(activity);
+        log.debug("Activity logged — incident: {}, action: {}, by: {}", incident.getId(), action, performer);
+    }
+
+    private String buildUpdateDetails(UpdateIncidentRequest request) {
+        List<String> changes = new java.util.ArrayList<>();
+        if (request.getTitle() != null)       changes.add("title");
+        if (request.getDescription() != null) changes.add("description");
+        if (request.getSeverity() != null)    changes.add("severity → " + request.getSeverity());
+        if (request.getCategory() != null)    changes.add("category → " + request.getCategory());
+        return "Fields updated: " + String.join(", ", changes);
+    }
+
     private boolean containsAnyKeyword(Incident incident, String keywords) {
         if (keywords == null || keywords.trim().isEmpty()) {
             return false;
@@ -264,6 +323,17 @@ public class IncidentService {
                 .createdAt(incident.getCreatedAt())
                 .updatedAt(incident.getUpdatedAt())
                 .actualResolution(incident.getActualResolution())
+                .build();
+    }
+
+    private IncidentActivityResponse mapToActivityResponse(IncidentActivity activity) {
+        return IncidentActivityResponse.builder()
+                .id(activity.getId())
+                .incidentId(activity.getIncident().getId())
+                .action(activity.getAction())
+                .performedBy(activity.getPerformedBy())
+                .details(activity.getDetails())
+                .createdAt(activity.getCreatedAt())
                 .build();
     }
 }

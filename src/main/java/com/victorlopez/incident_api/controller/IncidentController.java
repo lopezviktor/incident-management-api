@@ -1,6 +1,7 @@
 package com.victorlopez.incident_api.controller;
 
 import com.victorlopez.incident_api.dto.CreateIncidentRequest;
+import com.victorlopez.incident_api.dto.IncidentActivityResponse;
 import com.victorlopez.incident_api.dto.IncidentResponse;
 import com.victorlopez.incident_api.dto.MetricsResponse;
 import com.victorlopez.incident_api.dto.UpdateIncidentRequest;
@@ -145,6 +146,22 @@ public class IncidentController {
             @Parameter(description = "Unique identifier of the incident") @PathVariable UUID id) {
         IncidentResponse response = incidentService.reanalyzeIncident(id);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/activity")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get incident activity log (authenticated)", description = "Returns the full chronological activity history for an incident. Requires authentication.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Activity log retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Incident not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<List<IncidentActivityResponse>> getIncidentActivity(
+            @Parameter(description = "Unique identifier of the incident") @PathVariable UUID id) {
+        List<IncidentActivityResponse> activities = incidentService.getIncidentActivity(id);
+        return ResponseEntity.ok(activities);
     }
 
     @GetMapping("/metrics")
